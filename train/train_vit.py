@@ -20,7 +20,7 @@ def save_checkpoint(model, optimizer, epoch, loss, path):
     )
 
 
-def train(cfg, train_loader, val_loader):
+def train_vit(cfg, train_loader, val_loader):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     model = ViTCoordRegressor(
@@ -128,4 +128,4 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dataset, batch_size=cfg["training"]["batch_size"], shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=cfg["training"]["batch_size"], shuffle=False)
 
-    train(cfg, train_loader, val_loader)
+    train_vit(cfg, train_loader, val_loader)
