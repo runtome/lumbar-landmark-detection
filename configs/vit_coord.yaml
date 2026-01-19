@@ -1,0 +1,26 @@
+model:
+  name: vit_coord
+  backbone: vit_base_patch16_224
+  num_landmarks: 5
+
+data:
+  img_size: [224, 224]
+  batch_size: 16
+  num_workers: 4
+  train_csv: data/train.csv
+  val_csv: data/val.csv
+  image_root: datasets/lumbar/images
+
+training:
+  epochs: 50
+  lr: 1e-4
+  optimizer: adamw
+  weight_decay: 1e-4
+
+loss:
+  type: normalized_l2
+
+logging:
+  save_dir: runs/vit_coord
+  log_interval: 5
+  val_interval: 1
