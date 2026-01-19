@@ -119,40 +119,7 @@ def prepare_dataset():
     print("✅ Dataset preparation complete!")
 
 
-# ===============================
-# DEBUG VISUALIZATION
-# ===============================
-def show_random_sample(n=3):
-    import random
-    import cv2
-    import matplotlib.pyplot as plt
-
-    df = pd.read_csv(f"{OUT_ROOT}/splits/train.csv")
-    samples = random.sample(list(df.filename.unique()), n)
-
-    for fname in samples:
-        rows = df[df.filename == fname]
-        row0 = rows.iloc[0]
-
-        img_path = get_image_path(row0)
-        img = cv2.imread(img_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        plt.figure(figsize=(5, 5))
-        plt.imshow(img)
-        plt.title(f"{fname} | source={row0.source}")
-
-        for _, r in rows.iterrows():
-            x = int(r.x)
-            y = int(r.y)
-            plt.scatter(x, y, s=40, label=r.level)
-
-        plt.legend()
-        plt.axis("off")
-        plt.show()
-
 
 if __name__ == "__main__":
     mkdirs()
     prepare_dataset()
-    show_random_sample(n=2)
