@@ -1,5 +1,4 @@
 import os
-import yaml
 import torch
 from torch.utils.data import DataLoader
 
@@ -20,9 +19,45 @@ def save_checkpoint(model, optimizer, epoch, loss, path):
     )
 
 
-def train_vit(cfg, train_loader, val_loader):
+def train_vit(cfg):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    # =========================
+    # DATASETS & LOADERS
+    # =========================
+    train_dataset = LumbarDataset(
+        csv_path=cfg["data"]["train_csv"],
+        image_root=cfg["data"]["image_root"],
+        img_size=tuple(cfg["data"]["img_size"]),
+        mode="coord",
+    )
+
+    val_dataset = LumbarDataset(
+        csv_path=cfg["data"]["val_csv"],
+        image_root=cfg["data"]["image_root"],
+        img_size=tuple(cfg["data"]["img_size"]),
+        mode="coord",
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=cfg["training"]["batch_size"],
+        shuffle=True,
+        num_workers=cfg["training"]["num_workers"],
+        pin_memory=True,
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=cfg["training"]["batch_size"],
+        shuffle=False,
+        num_workers=cfg["training"]["num_workers"],
+        pin_memory=True,
+    )
+
+    # =========================
+    # MODEL
+    # =========================
     model = ViTCoordRegressor(
         num_landmarks=cfg["model"]["num_landmarks"]
     ).to(device)
@@ -35,17 +70,20 @@ def train_vit(cfg, train_loader, val_loader):
 
     criterion = NormalizedL2Loss(cfg["data"]["img_size"])
 
+    # =========================
+    # LOGGING
+    # =========================
     save_dir = cfg["logging"]["save_dir"]
     os.makedirs(save_dir, exist_ok=True)
 
     best_val_loss = float("inf")
 
+    # =========================
+    # TRAIN LOOP
+    # =========================
     for epoch in range(1, cfg["training"]["epochs"] + 1):
-        # ------------------
-        # TRAIN
-        # ------------------
         model.train()
-        train_loss = 0
+        train_loss = 0.0
 
         for img, gt in train_loader:
             img, gt = img.to(device), gt.to(device)
@@ -60,7 +98,6 @@ def train_vit(cfg, train_loader, val_loader):
             train_loss += loss.item()
 
         train_loss /= len(train_loader)
-
         print(f"[Epoch {epoch}] Train Loss: {train_loss:.5f}")
 
         # ------------------
@@ -80,7 +117,7 @@ def train_vit(cfg, train_loader, val_loader):
         # ------------------
         if epoch % cfg["logging"]["val_interval"] == 0:
             model.eval()
-            val_loss = 0
+            val_loss = 0.0
 
             with torch.no_grad():
                 for img, gt in val_loader:
@@ -92,9 +129,6 @@ def train_vit(cfg, train_loader, val_loader):
             val_loss /= len(val_loader)
             print(f"[Epoch {epoch}] Val Loss: {val_loss:.5f}")
 
-            # ------------------
-            # SAVE BEST
-            # ------------------
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 save_checkpoint(
@@ -105,27 +139,3 @@ def train_vit(cfg, train_loader, val_loader):
                     os.path.join(save_dir, "best.pt"),
                 )
                 print("✅ Best model updated!")
-
-
-if __name__ == "__main__":
-    cfg = yaml.safe_load(open("configs/vit_coord.yaml"))
-
-    # TODO: replace with your actual Dataset
-    train_dataset = LumbarDataset(
-        csv_path="datasets/lumbar/splits/train.csv",
-        image_root="datasets/lumbar/images/train",
-        img_size=(224, 224),
-        mode="coord"
-    )
-
-    val_dataset = LumbarDataset(
-        csv_path="datasets/lumbar/splits/val.csv",
-        image_root="datasets/lumbar/images/val",
-        img_size=(224, 224),
-        mode="coord"
-    )
-
-    train_loader = DataLoader(train_dataset, batch_size=cfg["training"]["batch_size"], shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=cfg["training"]["batch_size"], shuffle=False)
-
-    train_vit(cfg, train_loader, val_loader)

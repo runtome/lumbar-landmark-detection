@@ -4,18 +4,19 @@ model:
   num_landmarks: 5
 
 data:
+  image_root: /kaggle/input/lumbar-coordinate-pretraining-dataset/data
+  train_csv: datasets/lumbar/splits/train.csv
+  val_csv: datasets/lumbar/splits/val.csv
   img_size: [224, 224]
-  batch_size: 16
-  num_workers: 4
-  train_csv: data/train.csv
-  val_csv: data/val.csv
-  image_root: datasets/lumbar/images
+
 
 training:
   epochs: 50
   lr: 1e-4
   optimizer: adamw
-  weight_decay: 1e-4
+  weight_decay: 0.01
+  batch_size: 16
+  num_workers: 2
 
 loss:
   type: normalized_l2
