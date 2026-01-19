@@ -27,14 +27,14 @@ def train_vit(cfg):
     # =========================
     train_dataset = LumbarDataset(
         csv_path=cfg["data"]["train_csv"],
-        image_root=cfg["data"]["image_root"],
+        image_root=cfg["data"]["train_image_root"],
         img_size=tuple(cfg["data"]["img_size"]),
         mode="coord",
     )
 
     val_dataset = LumbarDataset(
         csv_path=cfg["data"]["val_csv"],
-        image_root=cfg["data"]["image_root"],
+        image_root=cfg["data"]["val_image_root"], 
         img_size=tuple(cfg["data"]["img_size"]),
         mode="coord",
     )

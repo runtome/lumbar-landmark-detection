@@ -4,9 +4,12 @@ model:
   num_landmarks: 5
 
 data:
-  image_root: /kaggle/input/lumbar-coordinate-pretraining-dataset/data
   train_csv: datasets/lumbar/splits/train.csv
   val_csv: datasets/lumbar/splits/val.csv
+
+  train_image_root: datasets/lumbar/images/train
+  val_image_root: datasets/lumbar/images/val
+
   img_size: [224, 224]
 
 
