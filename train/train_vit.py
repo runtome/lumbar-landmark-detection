@@ -32,7 +32,8 @@ def train_vit(cfg):
     save_dir = cfg["logging"]["save_dir"]
     log_csv_path = os.path.join(save_dir, "training_log.csv")
     
-    
+    # Create parent directory if it doesn't exist
+    os.makedirs(os.path.dirname(log_csv_path), exist_ok=True)
     csv_file = open(log_csv_path, "w", newline="")
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow(["epoch", "train_loss", "val_loss", "lr"])
