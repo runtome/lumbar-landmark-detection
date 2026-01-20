@@ -36,7 +36,13 @@ def load_model(exp_name, device="cuda"):
 # -------------------------------------------------
 # Visualization
 # -------------------------------------------------
-def visualize_gt_vs_pred(img, gt, pred, title):
+def visualize_gt_vs_pred(
+    img,
+    gt,
+    pred,
+    title,
+    save_path=None,
+):
     img = img.squeeze().cpu().numpy()
 
     plt.figure(figsize=(5, 5))
@@ -44,13 +50,31 @@ def visualize_gt_vs_pred(img, gt, pred, title):
     plt.title(title)
 
     for i, level in enumerate(LEVEL_ORDER):
-        plt.scatter(gt[i, 0], gt[i, 1], c="lime", s=50, label="GT" if i == 0 else "")
-        plt.scatter(pred[i, 0], pred[i, 1], c="red", s=60, marker="x", label="Pred" if i == 0 else "")
-        plt.plot([gt[i, 0], pred[i, 0]], [gt[i, 1], pred[i, 1]], "y--", linewidth=1)
+        plt.scatter(
+            gt[i, 0], gt[i, 1],
+            c="lime", s=50,
+            label="GT" if i == 0 else ""
+        )
+        plt.scatter(
+            pred[i, 0], pred[i, 1],
+            c="red", s=60, marker="x",
+            label="Pred" if i == 0 else ""
+        )
+        plt.plot(
+            [gt[i, 0], pred[i, 0]],
+            [gt[i, 1], pred[i, 1]],
+            "y--", linewidth=1
+        )
 
     plt.legend()
     plt.axis("off")
-    plt.show()
+
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close()
+    else:
+        plt.show()
+
 
 
 # -------------------------------------------------
@@ -61,8 +85,13 @@ def show_val_results(
     split="val",
     n_samples=3,
     device="cuda" if torch.cuda.is_available() else "cpu",
+    save_image=False,
 ):
     model, cfg = load_model(exp_name, device)
+    
+    # --------------------------------------------------
+    # Transform & Dataset
+    # --------------------------------------------------
     
     vit_transform = transforms.Compose([
         transforms.ToPILImage(),        # cv2 → PIL
@@ -78,6 +107,16 @@ def show_val_results(
         mode="coord",
         transform=vit_transform,
     )
+    
+    # --------------------------------------------------
+    # Output directory (from YAML)
+    # --------------------------------------------------
+    save_dir = cfg["logging"]["save_dir"]
+    out_dir = os.path.join(save_dir, "inference_result")
+    if save_image:
+        os.makedirs(out_dir, exist_ok=True)
+        
+        
 
     indices = random.sample(range(len(dataset)), n_samples)
 
@@ -87,9 +126,17 @@ def show_val_results(
         with torch.no_grad():
             pred = model(img.unsqueeze(0).to(device))[0].cpu()
 
+        save_path = None
+        if save_image:
+            save_path = os.path.join(
+                out_dir,
+                f"{split}_sample_{idx}.png"
+            )
+
         visualize_gt_vs_pred(
             img,
             gt,
             pred,
             title=f"{exp_name} | {split} | sample {idx}",
+            save_path=save_path,
         )
