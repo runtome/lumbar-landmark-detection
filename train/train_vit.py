@@ -198,6 +198,7 @@ def train_vit(cfg):
         if epoch % cfg["logging"]["val_interval"] == 0:
             model.eval()
             val_loss = 0.0
+            
             pbar = tqdm(
                 val_loader,
                 desc=f"Epoch {epoch}/{cfg['training']['epochs']} [Val]",
@@ -206,6 +207,8 @@ def train_vit(cfg):
                         
             mae_sum = torch.zeros(cfg["model"]["num_landmarks"], device=device)
             count = 0
+            running_abs_error = 0.0
+            running_count = 0
             
             pixel_errors = {i: [] for i in range(cfg["model"]["num_landmarks"])}
 
@@ -227,10 +230,24 @@ def train_vit(cfg):
                     for i, errs in batch_pixel_errors.items():
                         pixel_errors[i].extend(errs)
                         
-                    pbar.set_postfix(loss=f"{loss.item():.4f}")
+                    # 🔹 Pixel MAE (global)
+                    abs_err = torch.abs(pred - gt)
+                    running_abs_error += abs_err.sum().item()
+                    running_count += abs_err.numel()
+
+                    running_mae = running_abs_error / running_count
+
+                        
+                    pbar.set_postfix(
+                        val_loss=f"{loss.item():.4f}",
+                        mae=f"{running_mae:.2f}px"
+                    )
 
             val_loss /= len(val_loader)
             mae_avg = mae_sum / count
+            
+            
+            final_mae_pixels = running_abs_error / running_count
             
             mae = torch.mean(torch.abs(pred - gt))
             writer.add_scalar("Val/MAE_pixels", mae.item(), epoch)
@@ -274,7 +291,8 @@ def train_vit(cfg):
             
             print(
                 f"[Epoch {epoch}] "
-                f"Val Loss: {val_loss:.5f}"
+                f"Val Loss: {val_loss:.5f} | "
+                f"MAE: {final_mae_pixels:.2f} px"
             )
 
             # 🔧 NEW: scheduler step AFTER validation
@@ -284,7 +302,6 @@ def train_vit(cfg):
             new_lr = optimizer.param_groups[0]["lr"]
             if new_lr != current_lr:
                 print(f"🔻 LR reduced: {current_lr:.6f} → {new_lr:.6f}")
-                early_stopper.reset()   # 🔥 IMPORTANT to reset Early stopping
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -296,6 +313,8 @@ def train_vit(cfg):
                     os.path.join(save_dir, "best.pt"),
                 )
                 print("✅ Best model updated!")
+                
+                early_stopper.reset() # reset early stopper on improvement
             
             # ------------------
             # LOG TO CSV
