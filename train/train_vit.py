@@ -2,10 +2,14 @@ import os
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
+import csv
 
 from models.vit_coord import ViTCoordRegressor
 from models.losses import NormalizedL2Loss
 from datasets.lumbar_dataset import LumbarDataset
+from tools.logger import create_writer
+from tools.early_stopping import EarlyStopping
+
 
 
 def save_checkpoint(model, optimizer, epoch, loss, path):
@@ -21,7 +25,18 @@ def save_checkpoint(model, optimizer, epoch, loss, path):
 
 
 def train_vit(cfg):
+    #=========================
+    # CONFIGURATION
+    #=========================
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    save_dir = cfg["logging"]["save_dir"]
+    log_csv_path = os.path.join(save_dir, "training_log.csv")
+    
+    
+    csv_file = open(log_csv_path, "w", newline="")
+    csv_writer = csv.writer(csv_file)
+    csv_writer.writerow(["epoch", "train_loss", "val_loss", "lr"])
+
 
     # =========================
     # TRANSFORMS
@@ -89,19 +104,23 @@ def train_vit(cfg):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode="min",
-        factor=0.5,
-        patience=5,
-        min_lr=1e-6,
+        factor=cfg["training"]["scheduler"]["factor"],
+        patience=cfg["training"]["scheduler"]["patience"],
+        min_lr=cfg["training"]["scheduler"]["min_lr"],
     )
 
     # =========================
     # LOGGING
     # =========================
-    save_dir = cfg["logging"]["save_dir"]
+    
     os.makedirs(save_dir, exist_ok=True)
+    writer = create_writer(save_dir)
+
 
     best_val_loss = float("inf")
-
+    early_stopper = EarlyStopping(patience=cfg["training"]["early_stopping"]["patience"])
+    
+    
     # =========================
     # TRAIN LOOP
     # =========================
@@ -122,6 +141,9 @@ def train_vit(cfg):
             train_loss += loss.item()
 
         train_loss /= len(train_loader)
+        
+        writer.add_scalar("Loss/train", train_loss, epoch)
+        writer.add_scalar("LR", optimizer.param_groups[0]["lr"], epoch)
 
         # 🔧 NEW: get LR
         current_lr = optimizer.param_groups[0]["lr"]
@@ -159,6 +181,9 @@ def train_vit(cfg):
                     val_loss += loss.item()
 
             val_loss /= len(val_loader)
+            
+            writer.add_scalar("Loss/val", val_loss, epoch)
+
 
             print(
                 f"[Epoch {epoch}] "
@@ -183,11 +208,29 @@ def train_vit(cfg):
                     os.path.join(save_dir, "best.pt"),
                 )
                 print("✅ Best model updated!")
+            
+            # ------------------
+            # LOG TO CSV
+            # ------------------
+            current_lr = optimizer.param_groups[0]["lr"]
 
+            csv_writer.writerow([
+                epoch,
+                train_loss,
+                val_loss if epoch % cfg["logging"]["val_interval"] == 0 else None,
+                current_lr,
+            ])
+            csv_file.flush()
+
+            # 🔧 NEW: early stopping check
+            if early_stopper.step(val_loss):
+                csv_file.close()
+                print("⏹️ Early stopping triggered!")
+                break
         # ------------------
         # VISUALIZE AT FINAL EPOCH
         # ------------------
         if epoch == cfg["training"]["epochs"]:
             from tools.visualize_results import show_val_results
             show_val_results("vit_coord", n_samples=3)
-
+            csv_file.close()

@@ -20,6 +20,13 @@ training:
   weight_decay: 0.01
   batch_size: 16
   num_workers: 2
+  scheduler:
+    type: ReduceLROnPlateau
+    factor: 0.5
+    patience: 3
+    min_lr: 1.0e-6
+  early_stopping:
+    patience: 6
 
 loss:
   type: normalized_l2
