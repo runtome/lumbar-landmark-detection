@@ -3,6 +3,8 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import csv
+import numpy as np
+import matplotlib.pyplot as plt
 
 from models.vit_coord import ViTCoordRegressor
 from models.losses import NormalizedL2Loss
@@ -11,6 +13,9 @@ from tools.logger import create_writer
 from tools.early_stopping import EarlyStopping
 from tools.visualization_utils import draw_landmarks
 from tools.metrics import per_landmark_mae
+from tools.metrics import pixel_error_per_level
+from tools.plotting import plot_pixel_error_per_level
+
 
 
 
@@ -39,6 +44,8 @@ def train_vit(cfg):
     csv_file = open(log_csv_path, "w", newline="")
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow(["epoch", "train_loss", "val_loss", "lr"])
+    LEVELS = ["L1", "L2", "L3", "L4", "L5"]
+
 
 
     # =========================
@@ -170,13 +177,15 @@ def train_vit(cfg):
             )
 
         # ------------------
-        # VALIDATION
+        # VALIDATION 
         # ------------------
         if epoch % cfg["logging"]["val_interval"] == 0:
             model.eval()
             val_loss = 0.0
             mae_sum = torch.zeros(cfg["model"]["num_landmarks"], device=device)
             count = 0
+            
+            pixel_errors = {i: [] for i in range(cfg["model"]["num_landmarks"])}
 
             with torch.no_grad():
                 for img, gt in val_loader:
@@ -187,6 +196,13 @@ def train_vit(cfg):
                     batch_mae = per_landmark_mae(pred, gt)
                     mae_sum += batch_mae
                     count += 1
+                    
+                    batch_pixel_errors = pixel_error_per_level(
+                        pred, gt, img_size=cfg["data"]["img_size"][0]
+                    )
+
+                    for i, errs in batch_pixel_errors.items():
+                        pixel_errors[i].extend(errs)
 
             val_loss /= len(val_loader)
             mae_avg = mae_sum / count
@@ -194,8 +210,41 @@ def train_vit(cfg):
             writer.add_scalar("Loss/val", val_loss, epoch)
             for i, mae in enumerate(mae_avg):
                 writer.add_scalar(f"MAE/Landmark_{i+1}", mae.item(), epoch)
+            
+            # 📊 Pixel Error Plotting
+            mean_err = []
+            std_err = []
+            
+            for i, lvl in enumerate(LEVELS):
+                vals = np.array(pixel_errors[i])
 
+                mean = vals.mean()
+                std = vals.std()
 
+                mean_err.append(mean)
+                std_err.append(std)
+
+                # TensorBoard scalars
+                writer.add_scalar(f"PixelErrorMean/{lvl}", mean, epoch)
+                writer.add_scalar(f"PixelErrorStd/{lvl}", std, epoch)
+
+            fig = plot_pixel_error_per_level(LEVELS, mean_err, std_err)
+            writer.add_figure("PixelError/PerLevel", fig, epoch)
+            
+            #--------------------
+            # Save plot as PNG
+            # --------------------
+            plot_dir = os.path.join(save_dir, "pixel_error_plots")
+            os.makedirs(plot_dir, exist_ok=True)
+
+            fig_path = os.path.join(
+                plot_dir,
+                f"pixel_error_epoch_{epoch}.png"
+            )
+
+            fig.savefig(fig_path, dpi=200)
+            plt.close(fig)
+            
             print(
                 f"[Epoch {epoch}] "
                 f"Val Loss: {val_loss:.5f}"
@@ -259,7 +308,7 @@ def train_vit(cfg):
                     )
 
                     writer.add_image(
-                        f"Validation/GT_vs_Pred/{epoch}_sample_{i}",
+                        f"Validation/GT_vs_Pred/epoch_{epoch}_sample_{i}",
                         overlay,
                         epoch,
                         dataformats="HWC"
