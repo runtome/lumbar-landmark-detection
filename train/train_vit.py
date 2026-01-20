@@ -22,19 +22,19 @@ def save_checkpoint(model, optimizer, epoch, loss, path):
 
 def train_vit(cfg):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    
-    # =========================
-    # Transformations
-    # =========================
-    vit_transform = transforms.Compose([
-        transforms.ToPILImage(),        # cv2 → PIL
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),          # [1, H, W]
-        transforms.Normalize(mean=[0.5], std=[0.5]),
-    ]) 
 
     # =========================
-    # DATASETS & LOADERS
+    # TRANSFORMS
+    # =========================
+    vit_transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5]),
+    ])
+
+    # =========================
+    # DATASETS
     # =========================
     train_dataset = LumbarDataset(
         csv_path=cfg["data"]["train_csv"],
@@ -46,7 +46,7 @@ def train_vit(cfg):
 
     val_dataset = LumbarDataset(
         csv_path=cfg["data"]["val_csv"],
-        image_root=cfg["data"]["val_image_root"], 
+        image_root=cfg["data"]["val_image_root"],
         img_size=tuple(cfg["data"]["img_size"]),
         mode="coord",
         transform=vit_transform,
@@ -84,6 +84,18 @@ def train_vit(cfg):
     criterion = NormalizedL2Loss(cfg["data"]["img_size"])
 
     # =========================
+    # 🔧 NEW: LR SCHEDULER
+    # =========================
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.5,
+        patience=5,
+        min_lr=1e-6,
+        verbose=True,
+    )
+
+    # =========================
     # LOGGING
     # =========================
     save_dir = cfg["logging"]["save_dir"]
@@ -111,7 +123,15 @@ def train_vit(cfg):
             train_loss += loss.item()
 
         train_loss /= len(train_loader)
-        print(f"[Epoch {epoch}] Train Loss: {train_loss:.5f}")
+
+        # 🔧 NEW: get LR
+        current_lr = optimizer.param_groups[0]["lr"]
+
+        print(
+            f"[Epoch {epoch}] "
+            f"Train Loss: {train_loss:.5f} | "
+            f"LR: {current_lr:.6f}"
+        )
 
         # ------------------
         # SAVE LAST
@@ -140,7 +160,19 @@ def train_vit(cfg):
                     val_loss += loss.item()
 
             val_loss /= len(val_loader)
-            print(f"[Epoch {epoch}] Val Loss: {val_loss:.5f}")
+
+            print(
+                f"[Epoch {epoch}] "
+                f"Val Loss: {val_loss:.5f}"
+            )
+
+            # 🔧 NEW: scheduler step AFTER validation
+            scheduler.step(val_loss)
+
+            # 🔧 NEW: print LR after scheduler
+            new_lr = optimizer.param_groups[0]["lr"]
+            if new_lr != current_lr:
+                print(f"🔻 LR reduced: {current_lr:.6f} → {new_lr:.6f}")
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -152,13 +184,11 @@ def train_vit(cfg):
                     os.path.join(save_dir, "best.pt"),
                 )
                 print("✅ Best model updated!")
-        
+
         # ------------------
-        # VISUALIZE VALIDATION RESULTS
+        # VISUALIZE AT FINAL EPOCH
         # ------------------
         if epoch == cfg["training"]["epochs"]:
-            print("✅ Validation results visualized!")
             from tools.visualize_results import show_val_results
             show_val_results("vit_coord", n_samples=3)
-            
-                    
+
