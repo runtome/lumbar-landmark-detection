@@ -143,6 +143,10 @@ def train_vit(cfg):
 
             pred = model(img)
             loss = criterion(pred, gt)
+            # Debugging info
+            print("Pred min/max:", pred.min().item(), pred.max().item())
+            print("GT   min/max:", gt.min().item(), gt.max().item())
+
 
             optimizer.zero_grad()
             loss.backward()
