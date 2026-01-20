@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 
 LEVEL_ORDER = ["L1/L2", "L2/L3", "L3/L4", "L4/L5", "L5/S1"]
 
+
 class LumbarDataset(Dataset):
     def __init__(
         self,
@@ -24,51 +25,62 @@ class LumbarDataset(Dataset):
         self.sigma = sigma
         self.transform = transform
 
-        self.samples = self.df.groupby("filename")
+        # group by image
+        self.samples = list(self.df.groupby("filename"))
 
     def __len__(self):
         return len(self.samples)
 
-    def _load_image(self, row):
-        path = os.path.join(self.image_root, row.filename)
+    def _load_image(self, filename):
+        path = os.path.join(self.image_root, filename)
 
         if not os.path.exists(path):
             raise FileNotFoundError(f"Image not found: {path}")
 
+        # grayscale image
         img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-        img = cv2.resize(img, self.img_size)
-        img = img.astype(np.float32) / 255.0
-        return img[None, ...]
+
+        if img is None:
+            raise ValueError(f"Failed to load image: {path}")
+
+        return img  # H x W (uint8)
 
     def _make_heatmap(self, x, y):
         H, W = self.img_size
         xx, yy = np.meshgrid(np.arange(W), np.arange(H))
-        return np.exp(-((xx - x)**2 + (yy - y)**2) / (2 * self.sigma**2))
+        return np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * self.sigma ** 2))
 
     def __getitem__(self, idx):
-        _, rows = list(self.samples)[idx]
-        row0 = rows.iloc[0]
+        filename, rows = self.samples[idx]
 
-        img = self._load_image(row0)
+        # ---- image ----
+        img = self._load_image(filename)
 
+        # apply transform (Resize, ToTensor, Normalize)
+        if self.transform is not None:
+            img = self.transform(img)     # [1, H, W]
+        else:
+            img = torch.from_numpy(img).unsqueeze(0).float() / 255.0
+
+        # ---- landmarks ----
         coords = []
         heatmaps = []
 
         for level in LEVEL_ORDER:
             r = rows[rows.level == level]
+
             if len(r) == 0:
                 coords.append([0.0, 0.0])
-                heatmaps.append(np.zeros(self.img_size))
+                heatmaps.append(np.zeros(self.img_size, dtype=np.float32))
             else:
                 x = r.relative_x.values[0] * self.img_size[1]
                 y = r.relative_y.values[0] * self.img_size[0]
                 coords.append([x, y])
                 heatmaps.append(self._make_heatmap(x, y))
 
-        coords = torch.tensor(coords, dtype=torch.float32)
-        heatmaps = torch.tensor(heatmaps, dtype=torch.float32)
-
-        img = torch.tensor(img, dtype=torch.float32)
+        # FAST tensor conversion (fixes warning)
+        coords = torch.from_numpy(np.array(coords, dtype=np.float32))
+        heatmaps = torch.from_numpy(np.stack(heatmaps)).float()
 
         if self.mode == "coord":
             return img, coords

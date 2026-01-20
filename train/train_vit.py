@@ -1,6 +1,7 @@
 import os
 import torch
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
 from models.vit_coord import ViTCoordRegressor
 from models.losses import NormalizedL2Loss
@@ -21,6 +22,16 @@ def save_checkpoint(model, optimizer, epoch, loss, path):
 
 def train_vit(cfg):
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    # =========================
+    # Transformations
+    # =========================
+    vit_transform = transforms.Compose([
+        transforms.ToPILImage(),        # cv2 → PIL
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),          # [1, H, W]
+        transforms.Normalize(mean=[0.5], std=[0.5]),
+    ]) 
 
     # =========================
     # DATASETS & LOADERS
@@ -30,6 +41,7 @@ def train_vit(cfg):
         image_root=cfg["data"]["train_image_root"],
         img_size=tuple(cfg["data"]["img_size"]),
         mode="coord",
+        transform=vit_transform,
     )
 
     val_dataset = LumbarDataset(
@@ -37,6 +49,7 @@ def train_vit(cfg):
         image_root=cfg["data"]["val_image_root"], 
         img_size=tuple(cfg["data"]["img_size"]),
         mode="coord",
+        transform=vit_transform,
     )
 
     train_loader = DataLoader(
