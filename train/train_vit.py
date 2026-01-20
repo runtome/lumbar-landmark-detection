@@ -9,6 +9,8 @@ from models.losses import NormalizedL2Loss
 from datasets.lumbar_dataset import LumbarDataset
 from tools.logger import create_writer
 from tools.early_stopping import EarlyStopping
+from tools.visualization_utils import draw_landmarks
+from tools.metrics import per_landmark_mae
 
 
 
@@ -173,6 +175,8 @@ def train_vit(cfg):
         if epoch % cfg["logging"]["val_interval"] == 0:
             model.eval()
             val_loss = 0.0
+            mae_sum = torch.zeros(cfg["model"]["num_landmarks"], device=device)
+            count = 0
 
             with torch.no_grad():
                 for img, gt in val_loader:
@@ -180,10 +184,16 @@ def train_vit(cfg):
                     pred = model(img)
                     loss = criterion(pred, gt)
                     val_loss += loss.item()
+                    batch_mae = per_landmark_mae(pred, gt)
+                    mae_sum += batch_mae
+                    count += 1
 
             val_loss /= len(val_loader)
+            mae_avg = mae_sum / count
             
             writer.add_scalar("Loss/val", val_loss, epoch)
+            for i, mae in enumerate(mae_avg):
+                writer.add_scalar(f"MAE/Landmark_{i+1}", mae.item(), epoch)
 
 
             print(
@@ -223,8 +233,33 @@ def train_vit(cfg):
                 current_lr,
             ])
             csv_file.flush()
+            
+            # =========================
+            # 📊 TensorBoard Image Overlay
+            # =========================
+            if epoch % cfg["logging"]["val_interval"] == 0:
+                img_vis, gt_vis = next(iter(val_loader))
+                img_vis = img_vis.to(device)
+                gt_vis = gt_vis.to(device)
 
-            # 🔧 NEW: early stopping check
+                with torch.no_grad():
+                    pred_vis = model(img_vis)
+
+                overlay = draw_landmarks(
+                    image=img_vis[0],
+                    gt=gt_vis[0],
+                    pred=pred_vis[0]
+                )
+
+                writer.add_image(
+                    "Validation/GT_vs_Pred",
+                    overlay,
+                    epoch,
+                    dataformats="HWC"
+                )
+                        
+
+            # 🔧 early stopping check
             if early_stopper.step(val_loss):
                 csv_file.close()
                 writer.flush()
