@@ -10,7 +10,7 @@ data:
   train_image_root: datasets/lumbar/images/train
   val_image_root: datasets/lumbar/images/val
 
-  img_size: [256, 256]
+  img_size: [224, 224]
 
 
 training:
