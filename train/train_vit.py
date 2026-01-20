@@ -152,3 +152,13 @@ def train_vit(cfg):
                     os.path.join(save_dir, "best.pt"),
                 )
                 print("✅ Best model updated!")
+        
+        # ------------------
+        # VISUALIZE VALIDATION RESULTS
+        # ------------------
+        if epoch == cfg["training"]["epochs"]:
+            print("✅ Validation results visualized!")
+            from tools.visualize_results import show_val_results
+            show_val_results("vit_coord", n_samples=3)
+            
+                    
