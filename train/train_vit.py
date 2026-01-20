@@ -106,7 +106,10 @@ def train_vit(cfg):
         weight_decay=cfg["training"]["weight_decay"],
     )
 
-    criterion = NormalizedL2Loss(cfg["data"]["img_size"])
+    # criterion = NormalizedL2Loss(cfg["data"]["img_size"])
+    # criterion = torch.nn.MSELoss()
+    criterion = torch.nn.SmoothL1Loss(beta=5.0)
+
 
     # =========================
     # 🔧 NEW: LR SCHEDULER
@@ -143,10 +146,6 @@ def train_vit(cfg):
 
             pred = model(img)
             loss = criterion(pred, gt)
-            # Debugging info
-            print("Pred min/max:", pred.min().item(), pred.max().item())
-            print("GT   min/max:", gt.min().item(), gt.max().item())
-
 
             optimizer.zero_grad()
             loss.backward()
