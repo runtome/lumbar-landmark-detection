@@ -5,6 +5,8 @@ from torchvision import transforms
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+
 
 from models.vit_coord import ViTCoordRegressor
 from models.losses import NormalizedL2Loss
@@ -108,7 +110,11 @@ def train_vit(cfg):
 
     # criterion = NormalizedL2Loss(cfg["data"]["img_size"])
     # criterion = torch.nn.MSELoss()
-    criterion = torch.nn.SmoothL1Loss(beta=3.0)
+    
+    if cfg["loss"]["type"] == "normalized_l2":
+        criterion = NormalizedL2Loss(cfg["data"]["img_size"])
+    elif cfg["loss"]["type"] == "smooth_l1":
+        criterion = torch.nn.SmoothL1Loss(beta=cfg["loss"]["beta"])
 
 
     # =========================
@@ -141,7 +147,13 @@ def train_vit(cfg):
         model.train()
         train_loss = 0.0
 
-        for img, gt in train_loader:
+        pbar = tqdm(
+            train_loader,
+            desc=f"Epoch {epoch}/{cfg['training']['epochs']} [Train]",
+            leave=False
+        )
+
+        for img, gt in pbar:
             img, gt = img.to(device), gt.to(device)
 
             pred = model(img)
@@ -152,9 +164,10 @@ def train_vit(cfg):
             optimizer.step()
 
             train_loss += loss.item()
+            pbar.set_postfix(loss=f"{loss.item():.4f}")
 
         train_loss /= len(train_loader)
-        
+                
         writer.add_scalar("Loss/train", train_loss, epoch)
         writer.add_scalar("LR", optimizer.param_groups[0]["lr"], epoch)
 
@@ -185,17 +198,24 @@ def train_vit(cfg):
         if epoch % cfg["logging"]["val_interval"] == 0:
             model.eval()
             val_loss = 0.0
+            pbar = tqdm(
+                val_loader,
+                desc=f"Epoch {epoch}/{cfg['training']['epochs']} [Val]",
+                leave=False
+            )
+                        
             mae_sum = torch.zeros(cfg["model"]["num_landmarks"], device=device)
             count = 0
             
             pixel_errors = {i: [] for i in range(cfg["model"]["num_landmarks"])}
 
             with torch.no_grad():
-                for img, gt in val_loader:
+                for img, gt in pbar:
                     img, gt = img.to(device), gt.to(device)
                     pred = model(img)
                     loss = criterion(pred, gt)
                     val_loss += loss.item()
+                    
                     batch_mae = per_landmark_mae(pred, gt)
                     mae_sum += batch_mae
                     count += 1
@@ -206,6 +226,8 @@ def train_vit(cfg):
 
                     for i, errs in batch_pixel_errors.items():
                         pixel_errors[i].extend(errs)
+                        
+                    pbar.set_postfix(loss=f"{loss.item():.4f}")
 
             val_loss /= len(val_loader)
             mae_avg = mae_sum / count

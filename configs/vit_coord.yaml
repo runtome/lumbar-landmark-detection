@@ -14,7 +14,7 @@ data:
 
 
 training:
-  epochs: 10
+  epochs: 100
   lr: 0.001
   optimizer: adamw
   weight_decay: 0.01
@@ -29,7 +29,8 @@ training:
     patience: 6
 
 loss:
-  type: normalized_l2
+  type: smooth_l1
+  beta: 3.0
 
 logging:
   save_dir: runs/vit_coord
