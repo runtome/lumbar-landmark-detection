@@ -108,7 +108,7 @@ def train_vit(cfg):
 
     # criterion = NormalizedL2Loss(cfg["data"]["img_size"])
     # criterion = torch.nn.MSELoss()
-    criterion = torch.nn.SmoothL1Loss(beta=5.0)
+    criterion = torch.nn.SmoothL1Loss(beta=3.0)
 
 
     # =========================
@@ -210,6 +210,8 @@ def train_vit(cfg):
             val_loss /= len(val_loader)
             mae_avg = mae_sum / count
             
+            mae = torch.mean(torch.abs(pred - gt))
+            writer.add_scalar("Val/MAE_pixels", mae.item(), epoch)
             writer.add_scalar("Loss/val", val_loss, epoch)
             for i, mae in enumerate(mae_avg):
                 writer.add_scalar(f"MAE/Landmark_{i+1}", mae.item(), epoch)
