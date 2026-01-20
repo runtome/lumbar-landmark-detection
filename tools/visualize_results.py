@@ -68,12 +68,14 @@ def visualize_gt_vs_pred(
 
     plt.legend()
     plt.axis("off")
+    plt.show()
 
     if save_path is not None:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         plt.close()
     else:
-        plt.show()
+        plt.close()
+        
 
 
 
