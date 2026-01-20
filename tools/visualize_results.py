@@ -3,6 +3,7 @@ import yaml
 import torch
 import random
 import matplotlib.pyplot as plt
+from torchvision import transforms
 
 from datasets.lumbar_dataset import LumbarDataset
 from models.vit_coord import ViTCoordRegressor
@@ -59,15 +60,23 @@ def show_val_results(
     exp_name="vit_coord",
     split="val",
     n_samples=3,
-    device="cuda",
+    device="cuda" if torch.cuda.is_available() else "cpu",
 ):
     model, cfg = load_model(exp_name, device)
+    
+    vit_transform = transforms.Compose([
+        transforms.ToPILImage(),        # cv2 → PIL
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),          # [1, H, W]
+        transforms.Normalize(mean=[0.5], std=[0.5]),
+    ])
 
     dataset = LumbarDataset(
         csv_path=f"datasets/lumbar/splits/{split}.csv",
         image_root=f"datasets/lumbar/images/{split}",
         img_size=tuple(cfg["data"]["img_size"]),
         mode="coord",
+        transform=vit_transform,
     )
 
     indices = random.sample(range(len(dataset)), n_samples)
