@@ -13,3 +13,7 @@ class EarlyStopping:
         else:
             self.counter += 1
             return self.counter >= self.patience
+
+    def reset(self):
+        """Call this when LR is reduced"""
+        self.counter = 0

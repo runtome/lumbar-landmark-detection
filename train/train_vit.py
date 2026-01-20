@@ -198,6 +198,7 @@ def train_vit(cfg):
             new_lr = optimizer.param_groups[0]["lr"]
             if new_lr != current_lr:
                 print(f"🔻 LR reduced: {current_lr:.6f} → {new_lr:.6f}")
+                early_stopper.reset()   # 🔥 IMPORTANT to reset Early stopping
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -226,6 +227,8 @@ def train_vit(cfg):
             # 🔧 NEW: early stopping check
             if early_stopper.step(val_loss):
                 csv_file.close()
+                writer.flush()
+                writer.close()
                 print("⏹️ Early stopping triggered!")
                 break
         # ------------------
@@ -235,3 +238,5 @@ def train_vit(cfg):
             from tools.visualize_results import show_val_results
             show_val_results("vit_coord", n_samples=3)
             csv_file.close()
+            writer.flush()
+            writer.close()
