@@ -250,12 +250,19 @@ def train_vit(cfg):
                     gt=gt_vis[0],
                     pred=pred_vis[0]
                 )
+                
+                for i in range(min(3, img_vis.size(0))):
+                    overlay = draw_landmarks(
+                        image=img_vis[i],
+                        gt=gt_vis[i],
+                        pred=pred_vis[i]
+                    )
 
-                writer.add_image(
-                    "Validation/GT_vs_Pred",
-                    overlay,
-                    epoch,
-                    dataformats="HWC"
+                    writer.add_image(
+                        f"Validation/GT_vs_Pred/{epoch}_sample_{i}",
+                        overlay,
+                        epoch,
+                        dataformats="HWC"
                 )
                         
 
