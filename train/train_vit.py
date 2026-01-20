@@ -201,7 +201,7 @@ def train_vit(cfg):
                     count += 1
                     
                     batch_pixel_errors = pixel_error_per_level(
-                        pred, gt, img_size=cfg["data"]["img_size"][0]
+                        pred, gt
                     )
 
                     for i, errs in batch_pixel_errors.items():
