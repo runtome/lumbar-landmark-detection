@@ -239,29 +239,28 @@ def train_vit_heatmap(cfg):
                     loss = criterion(pred_hm, gt_hm)
                     val_loss += loss.item()
                     
-                    batch_mae = per_landmark_mae(pred_hm, gt_hm, cfg["data"]["img_size"])
-                    mae_sum += batch_mae
-                    count += 1
-                    
-                    batch_pixel_errors = pixel_error_per_level(
-                        pred_hm, gt_hm, cfg["data"]["img_size"]
-                    )
 
-                    for i, errs in batch_pixel_errors.items():
-                        pixel_errors[i].extend(errs)
                     
-                    # decode coords
+                    # ----------------------------------
+                    # 🔥 Decode heatmaps → coordinates
+                    # ----------------------------------
                     pred_xy = soft_argmax_2d(pred_hm)
                     gt_xy = soft_argmax_2d(gt_hm)
                     
                     H, W = cfg["data"]["img_size"]
+                    
+                    pred_xy_px = pred_xy.clone()
+                    gt_xy_px   = gt_xy.clone()
+                    
                     pred_xy[..., 0] *= W
                     pred_xy[..., 1] *= H
                     gt_xy[..., 0] *= W
                     gt_xy[..., 1] *= H
                     
-
-                    abs_err = torch.norm(pred_xy - gt_xy, dim=-1)  # [B, N]
+                    # ----------------------------------
+                    # 🔹 Pixel MAE
+                    # ----------------------------------
+                    abs_err = torch.norm(pred_xy_px - gt_xy_px, dim=-1)  # [B, 5]
                     running_abs_error += abs_err.sum().item()
                     running_count += abs_err.numel()
                     
@@ -274,17 +273,11 @@ def train_vit_heatmap(cfg):
                     )
 
             val_loss /= len(val_loader)
-            mae_avg = mae_sum / count
-            mae_px = running_abs_error / running_count
-            
-            
             final_mae_pixels = running_abs_error / running_count
             
             mae = torch.mean(torch.abs(pred_xy - gt_xy))
-            writer.add_scalar("Val/MAE_pixels", mae.item(), epoch)
             writer.add_scalar("Loss/val", val_loss, epoch)
-            for i, mae in enumerate(mae_avg):
-                writer.add_scalar(f"MAE/Landmark_{i+1}", mae.item(), epoch)
+            writer.add_scalar("Val/MAE_pixels", final_mae_pixels, epoch)
             
             # 📊 Pixel Error Plotting
             mean_err = []
