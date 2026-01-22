@@ -41,7 +41,8 @@ class LumbarDataset(Dataset):
         return img
 
     def _make_heatmap(self, x, y):
-        H, W = self.heatmap_size
+        H = self.heatmap_size
+        W = self.heatmap_size
         xx, yy = np.meshgrid(np.arange(W), np.arange(H))
         heatmap = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * self.sigma ** 2))
         return heatmap.astype(np.float32)
