@@ -1,3 +1,4 @@
+# tools\visualize_results.py
 import os
 import yaml
 import torch
@@ -9,6 +10,21 @@ from datasets.lumbar_dataset import LumbarDataset
 from models.vit_coord import ViTCoordRegressor
 
 LEVEL_ORDER = ["L1/L2", "L2/L3", "L3/L4", "L4/L5", "L5/S1"]
+
+# -------------------------------------------------
+# Coordinate Conversion
+# -------------------------------------------------
+def to_pixel_coords(coords, img_size):
+    """
+    coords: [N, 2] in [0,1]
+    img_size: (H, W)
+    """
+    H, W = img_size
+    coords_px = coords.clone()
+    coords_px[:, 0] *= W   # x
+    coords_px[:, 1] *= H   # y
+    return coords_px
+
 
 
 # -------------------------------------------------
@@ -41,9 +57,14 @@ def visualize_gt_vs_pred(
     gt,
     pred,
     title,
+    img_size,
     save_path=None,
 ):
     img = img.squeeze().cpu().numpy()
+
+    # 🔧 convert to pixel space
+    gt = to_pixel_coords(gt, img_size)
+    pred = to_pixel_coords(pred, img_size)
 
     plt.figure(figsize=(5, 5))
     plt.imshow(img, cmap="gray")
@@ -68,15 +89,13 @@ def visualize_gt_vs_pred(
 
     plt.legend()
     plt.axis("off")
-    plt.show()
 
     if save_path is not None:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         plt.close()
     else:
+        plt.show()
         plt.close()
-        
-
 
 
 # -------------------------------------------------
@@ -140,5 +159,6 @@ def show_val_results(
             gt,
             pred,
             title=f"{exp_name} | {split} | sample {idx}",
+            img_size=cfg["data"]["img_size"],   # 🔧 ADD THIS
             save_path=save_path,
         )

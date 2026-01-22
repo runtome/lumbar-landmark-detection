@@ -219,12 +219,12 @@ def train_vit(cfg):
                     loss = criterion(pred, gt)
                     val_loss += loss.item()
                     
-                    batch_mae = per_landmark_mae(pred, gt)
+                    batch_mae = per_landmark_mae(pred, gt, cfg["data"]["img_size"])
                     mae_sum += batch_mae
                     count += 1
                     
                     batch_pixel_errors = pixel_error_per_level(
-                        pred, gt
+                        pred, gt, cfg["data"]["img_size"]
                     )
 
                     for i, errs in batch_pixel_errors.items():
