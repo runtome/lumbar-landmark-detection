@@ -14,7 +14,7 @@ def main():
     
     if cfg["model"]["name"] == "vit_heatmap":
         train_vit_heatmap(cfg)
-    elif cfg["model"]["name"] == "vit":
+    elif cfg["model"]["name"] == "vit_coord":
         train_vit(cfg)
     
     else:
