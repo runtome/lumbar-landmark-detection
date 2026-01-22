@@ -30,7 +30,7 @@ training:
 
 loss:
   type: smooth_l1
-  beta: 3.0.02
+  beta: 0.02
 
 logging:
   save_dir: runs/vit_coord
