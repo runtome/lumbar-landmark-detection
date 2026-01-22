@@ -85,8 +85,8 @@ class LumbarDataset(Dataset):
                 coords.append([x_norm, y_norm])
 
                 # 🔥 convert to HEATMAP resolution (NOT image resolution)
-                x_pix = x_norm * self.heatmap_size[1]
-                y_pix = y_norm * self.heatmap_size[0]
+                x_pix = x_norm * self.heatmap_size
+                y_pix = y_norm * self.heatmap_size
                 heatmaps.append(self._make_heatmap(x_pix, y_pix))
 
         coords = torch.tensor(coords, dtype=torch.float32)
