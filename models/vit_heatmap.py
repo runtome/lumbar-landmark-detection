@@ -2,44 +2,20 @@ import torch
 import torch.nn as nn
 import timm
 
+
 class ViTHeatmap(nn.Module):
-    def __init__(self, backbone="vit_base_patch16_224", num_landmarks=5):
-        super().__init__()
-
-        self.backbone = timm.create_model(
-            backbone, pretrained=True, in_chans=1, num_classes=0
-        )
-
-        self.embed_dim = self.backbone.num_features
-        self.num_landmarks = num_landmarks
-
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(self.embed_dim, 256, 2, 2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(256, 128, 2, 2),
-            nn.ReLU(),
-            nn.Conv2d(128, num_landmarks, 1),
-        )
-
-    def forward(self, x):
-        B = x.size(0)
-        tokens = self.backbone.patch_embed(x)
-        h = w = int(tokens.shape[1] ** 0.5)
-
-        tokens = tokens.transpose(1, 2).reshape(B, -1, h, w)
-        return self.decoder(tokens)
-
-
-class ViTHeatmapRegressor(nn.Module):
     def __init__(
         self,
         backbone="vit_base_patch16_224",
         num_landmarks=5,
+        heatmap_size=56,
         pretrained=True,
         in_chans=1,
-        img_size=224,
     ):
         super().__init__()
+
+        self.num_landmarks = num_landmarks
+        self.heatmap_size = heatmap_size
 
         self.backbone = timm.create_model(
             backbone,
@@ -48,19 +24,26 @@ class ViTHeatmapRegressor(nn.Module):
             num_classes=0,
         )
 
-        C = self.backbone.num_features
+        feat_dim = self.backbone.num_features
 
         self.head = nn.Sequential(
-            nn.Linear(C, 512),
-            nn.ReLU(),
-            nn.Linear(512, num_landmarks * img_size * img_size),
+            nn.Linear(feat_dim, 1024),
+            nn.ReLU(inplace=True),
+            nn.Linear(
+                1024,
+                num_landmarks * heatmap_size * heatmap_size
+            )
         )
-
-        self.num_landmarks = num_landmarks
-        self.img_size = img_size
 
     def forward(self, x):
         B = x.size(0)
         feat = self.backbone(x)
         out = self.head(feat)
-        return out.view(B, self.num_landmarks, self.img_size, self.img_size)
+
+        out = out.view(
+            B,
+            self.num_landmarks,
+            self.heatmap_size,
+            self.heatmap_size
+        )
+        return out
