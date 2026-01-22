@@ -2,7 +2,7 @@ model:
   name: vit_heatmap
   backbone: vit_base_patch16_224
   num_landmarks: 5
-  heatmap_size: [56, 56]
+  heatmap_size: 56
   in_channels: 1
 
 data:
