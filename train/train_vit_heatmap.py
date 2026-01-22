@@ -98,7 +98,7 @@ def train_vit_heatmap(cfg):
         csv_path=cfg["data"]["val_csv"],
         image_root=cfg["data"]["val_image_root"],
         img_size=tuple(cfg["data"]["img_size"]),
-        heatmap_size=tuple(cfg["data"]["heatmap_size"]),
+        heatmap_size=tuple(cfg["model"]["heatmap_size"]),
         mode="heatmap",
         transform=vit_transform,
     )
