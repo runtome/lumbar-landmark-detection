@@ -1,24 +1,43 @@
 #Modifyed train_vit.py to create train_vit_heatmap.py for training ViT model for heatmap regression
 # train/train_vit_heatmap.py
 import os
+import csv
+from tools.metrics import per_landmark_mae, pixel_error_per_level
 import torch
+import numpy as np
 from torch.utils.data import DataLoader
 from torchvision import transforms
-import csv
-import numpy as np
-import matplotlib.pyplot as plt
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
-
-from models.vit_coord import ViTCoordRegressor
-from models.losses import NormalizedL2Loss
+from models.vit_heatmap import ViTHeatmap
 from datasets.lumbar_dataset import LumbarDataset
 from tools.logger import create_writer
 from tools.early_stopping import EarlyStopping
-from tools.visualization_utils import draw_landmarks
-from tools.metrics import per_landmark_mae
-from tools.metrics import pixel_error_per_level
 from tools.plotting import plot_pixel_error_per_level
+from tools.visualization_utils import draw_landmarks
+
+import torch.nn.functional as F
+
+
+def soft_argmax_2d(heatmaps):
+    """
+    heatmaps: [B, N, H, W]
+    return:   [B, N, 2]  (normalized 0–1)
+    """
+    B, N, H, W = heatmaps.shape
+    heatmaps = heatmaps.view(B, N, -1)
+    heatmaps = F.softmax(heatmaps, dim=-1)
+
+    xs = torch.linspace(0, 1, W, device=heatmaps.device)
+    ys = torch.linspace(0, 1, H, device=heatmaps.device)
+    xs = xs.repeat(H)
+    ys = ys.repeat_interleave(W)
+
+    x = torch.sum(heatmaps * xs, dim=-1)
+    y = torch.sum(heatmaps * ys, dim=-1)
+
+    return torch.stack([x, y], dim=-1)
 
 
 
@@ -35,19 +54,20 @@ def save_checkpoint(model, optimizer, epoch, loss, path):
     )
 
 
-def train_vit(cfg):
+def train_vit_heatmap(cfg):
     #=========================
     # CONFIGURATION
     #=========================
     device = "cuda" if torch.cuda.is_available() else "cpu"
     save_dir = cfg["logging"]["save_dir"]
-    log_csv_path = os.path.join(save_dir, "training_log.csv")
+    os.makedirs(save_dir, exist_ok=True)
     
-    # Create parent directory if it doesn't exist
+    log_csv_path = os.path.join(save_dir, "training_log.csv")
     os.makedirs(os.path.dirname(log_csv_path), exist_ok=True)
     csv_file = open(log_csv_path, "w", newline="")
     csv_writer = csv.writer(csv_file)
-    csv_writer.writerow(["epoch", "train_loss", "val_loss", "lr"])
+    csv_writer.writerow(["epoch", "train_loss", "val_loss", "mae_px", "lr"])
+    
     LEVELS = ["L1", "L2", "L3", "L4", "L5"]
 
 
@@ -69,7 +89,7 @@ def train_vit(cfg):
         csv_path=cfg["data"]["train_csv"],
         image_root=cfg["data"]["train_image_root"],
         img_size=tuple(cfg["data"]["img_size"]),
-        mode="coord",
+        mode="heatmap",
         transform=vit_transform,
     )
 
@@ -77,7 +97,7 @@ def train_vit(cfg):
         csv_path=cfg["data"]["val_csv"],
         image_root=cfg["data"]["val_image_root"],
         img_size=tuple(cfg["data"]["img_size"]),
-        mode="coord",
+        mode="heatmap",
         transform=vit_transform,
     )
 
@@ -100,8 +120,10 @@ def train_vit(cfg):
     # =========================
     # MODEL
     # =========================
-    model = ViTCoordRegressor(
-        num_landmarks=cfg["model"]["num_landmarks"]
+    model = ViTHeatmap(
+        num_landmarks=cfg["model"]["num_landmarks"],
+        heatmap_size=cfg["model"]["heatmap_size"],
+        in_chans=cfg["model"]["in_channels"],
     ).to(device)
 
     optimizer = torch.optim.AdamW(
@@ -109,14 +131,8 @@ def train_vit(cfg):
         lr=cfg["training"]["lr"],
         weight_decay=cfg["training"]["weight_decay"],
     )
-
-    # criterion = NormalizedL2Loss(cfg["data"]["img_size"])
-    # criterion = torch.nn.MSELoss()
     
-    if cfg["loss"]["type"] == "normalized_l2":
-        criterion = NormalizedL2Loss(cfg["data"]["img_size"])
-    elif cfg["loss"]["type"] == "smooth_l1":
-        criterion = torch.nn.SmoothL1Loss(beta=cfg["loss"]["beta"])
+    criterion = torch.nn.MSELoss()
 
 
     # =========================
@@ -134,9 +150,7 @@ def train_vit(cfg):
     # LOGGING
     # =========================
     
-    os.makedirs(save_dir, exist_ok=True)
     writer = create_writer(save_dir)
-
 
     best_val_loss = float("inf")
     early_stopper = EarlyStopping(patience=cfg["training"]["early_stopping"]["patience"])
@@ -155,12 +169,13 @@ def train_vit(cfg):
             leave=False
         )
 
-        for img, gt in pbar:
-            img, gt = img.to(device), gt.to(device)
+        for img, gt_hm in pbar:
+            img = img.to(device)
+            gt_hm = gt_hm.to(device)
 
             pred = model(img)
-            loss = criterion(pred, gt)
-
+            loss = criterion(pred, gt_hm)
+            
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -168,10 +183,9 @@ def train_vit(cfg):
             train_loss += loss.item()
             pbar.set_postfix(loss=f"{loss.item():.5f}")
 
-        train_loss /= len(train_loader)
-                
+        train_loss /= len(train_loader)                
         writer.add_scalar("Loss/train", train_loss, epoch)
-        writer.add_scalar("LR", optimizer.param_groups[0]["lr"], epoch)
+        writer.add_scalar("LR", optimizer.param_groups[0]["lr"], epoch)        
 
         # 🔧 NEW: get LR
         current_lr = optimizer.param_groups[0]["lr"]
@@ -200,6 +214,8 @@ def train_vit(cfg):
         if epoch % cfg["logging"]["val_interval"] == 0:
             model.eval()
             val_loss = 0.0
+            running_abs_error = 0.0
+            running_count = 0
             
             pbar = tqdm(
                 val_loader,
@@ -209,46 +225,46 @@ def train_vit(cfg):
                         
             mae_sum = torch.zeros(cfg["model"]["num_landmarks"], device=device)
             count = 0
-            running_abs_error = 0.0
-            running_count = 0
             
             pixel_errors = {i: [] for i in range(cfg["model"]["num_landmarks"])}
 
             with torch.no_grad():
-                for img, gt in pbar:
-                    img, gt = img.to(device), gt.to(device)
-                    pred = model(img)
-                    loss = criterion(pred, gt)
+                for img, gt_hm in pbar:
+                    img = img.to(device)
+                    gt_hm = gt_hm.to(device)
+                    
+                    pred_hm = model(img)
+                    loss = criterion(pred_hm, gt_hm)
                     val_loss += loss.item()
                     
-                    batch_mae = per_landmark_mae(pred, gt, cfg["data"]["img_size"])
+                    batch_mae = per_landmark_mae(pred_hm, gt_hm, cfg["data"]["img_size"])
                     mae_sum += batch_mae
                     count += 1
                     
                     batch_pixel_errors = pixel_error_per_level(
-                        pred, gt, cfg["data"]["img_size"]
+                        pred_hm, gt_hm, cfg["data"]["img_size"]
                     )
 
                     for i, errs in batch_pixel_errors.items():
                         pixel_errors[i].extend(errs)
-                        
-                    # 🔹 Pixel MAE                    
+                    
+                    # decode coords
+                    pred_xy = soft_argmax_2d(pred_hm)
+                    gt_xy = soft_argmax_2d(gt_hm)
+                    
                     H, W = cfg["data"]["img_size"]
+                    pred_xy[..., 0] *= W
+                    pred_xy[..., 1] *= H
+                    gt_xy[..., 0] *= W
+                    gt_xy[..., 1] *= H
+                    
 
-                    pred_px = pred.clone()
-                    gt_px = gt.clone()
-
-                    pred_px[..., 0] *= W
-                    pred_px[..., 1] *= H
-                    gt_px[..., 0] *= W
-                    gt_px[..., 1] *= H
-
-                    abs_err = torch.norm(pred_px - gt_px, dim=-1)  # [B, N]
+                    abs_err = torch.norm(pred_xy - gt_xy, dim=-1)  # [B, N]
                     running_abs_error += abs_err.sum().item()
                     running_count += abs_err.numel()
+                    
 
                     running_mae = running_abs_error / running_count
-
                         
                     pbar.set_postfix(
                         val_loss=f"{loss.item():.5f}",
@@ -257,11 +273,12 @@ def train_vit(cfg):
 
             val_loss /= len(val_loader)
             mae_avg = mae_sum / count
+            mae_px = running_abs_error / running_count
             
             
             final_mae_pixels = running_abs_error / running_count
             
-            mae = torch.mean(torch.abs(pred - gt))
+            mae = torch.mean(torch.abs(pred_xy - gt_xy))
             writer.add_scalar("Val/MAE_pixels", mae.item(), epoch)
             writer.add_scalar("Loss/val", val_loss, epoch)
             for i, mae in enumerate(mae_avg):
@@ -337,6 +354,7 @@ def train_vit(cfg):
                 epoch,
                 train_loss,
                 val_loss if epoch % cfg["logging"]["val_interval"] == 0 else None,
+                mae_px if epoch % cfg["logging"]["val_interval"] == 0 else None,
                 current_lr,
             ])
             csv_file.flush()

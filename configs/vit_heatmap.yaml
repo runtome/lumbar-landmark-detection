@@ -33,6 +33,6 @@ loss:
   beta: 0.02
 
 logging:
-  save_dir: runs/vit_coord
+  save_dir: runs/vit_heatmap
   log_interval: 5
   val_interval: 1
