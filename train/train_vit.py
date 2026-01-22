@@ -164,7 +164,7 @@ def train_vit(cfg):
             optimizer.step()
 
             train_loss += loss.item()
-            pbar.set_postfix(loss=f"{loss.item():.4f}")
+            pbar.set_postfix(loss=f"{loss.item():.5f}")
 
         train_loss /= len(train_loader)
                 
@@ -230,8 +230,18 @@ def train_vit(cfg):
                     for i, errs in batch_pixel_errors.items():
                         pixel_errors[i].extend(errs)
                         
-                    # 🔹 Pixel MAE (global)
-                    abs_err = torch.abs(pred - gt)
+                    # 🔹 Pixel MAE                    
+                    H, W = cfg["data"]["img_size"]
+
+                    pred_px = pred.clone()
+                    gt_px = gt.clone()
+
+                    pred_px[..., 0] *= W
+                    pred_px[..., 1] *= H
+                    gt_px[..., 0] *= W
+                    gt_px[..., 1] *= H
+
+                    abs_err = torch.norm(pred_px - gt_px, dim=-1)  # [B, N]
                     running_abs_error += abs_err.sum().item()
                     running_count += abs_err.numel()
 
@@ -239,8 +249,8 @@ def train_vit(cfg):
 
                         
                     pbar.set_postfix(
-                        val_loss=f"{loss.item():.4f}",
-                        mae=f"{running_mae:.2f}px"
+                        val_loss=f"{loss.item():.5f}",
+                        mae=f"{running_mae:.3f}px"
                     )
 
             val_loss /= len(val_loader)
@@ -292,7 +302,7 @@ def train_vit(cfg):
             print(
                 f"[Epoch {epoch}] "
                 f"Val Loss: {val_loss:.5f} | "
-                f"MAE: {final_mae_pixels:.2f} px"
+                f"MAE: {final_mae_pixels:.3f} px"
             )
 
             # 🔧 NEW: scheduler step AFTER validation
