@@ -8,6 +8,7 @@ from torchvision import transforms
 
 from datasets.lumbar_dataset import LumbarDataset
 from models.vit_coord import ViTCoordRegressor
+from models.vit_heatmap import ViTHeatmapRegressor 
 
 LEVEL_ORDER = ["L1/L2", "L2/L3", "L3/L4", "L4/L5", "L5/S1"]
 
@@ -35,12 +36,22 @@ def load_model(exp_name, device="cuda"):
     weight_path = f"runs/{exp_name}/best.pt"
 
     cfg = yaml.safe_load(open(cfg_path))
-
-    model = ViTCoordRegressor(
-        num_landmarks=cfg["model"]["num_landmarks"],
-        pretrained=False,
-        in_chans=1,
-    ).to(device)
+    if "model" not in cfg:
+        raise ValueError("The config file is missing the 'model' section.")
+    
+    if exp_name.startswith("vit_coord"):
+        model = ViTCoordRegressor(
+            num_landmarks=cfg["model"]["num_landmarks"],
+            pretrained=False,
+            in_chans=1,
+        ).to(device)
+    elif exp_name.startswith("vit_heatmap"):
+        model = ViTHeatmapRegressor(
+            num_landmarks=cfg["model"]["num_landmarks"],
+            heatmap_size=cfg["model"]["heatmap_size"],
+            in_chans=cfg["model"]["in_channels"],
+        ).to(device)
+        
 
     ckpt = torch.load(weight_path, map_location=device)
     model.load_state_dict(ckpt["model_state"])
@@ -121,13 +132,22 @@ def show_val_results(
         transforms.Normalize(mean=[0.5], std=[0.5]),
     ])
 
-    dataset = LumbarDataset(
-        csv_path=f"datasets/lumbar/splits/{split}.csv",
-        image_root=f"datasets/lumbar/images/{split}",
-        img_size=tuple(cfg["data"]["img_size"]),
-        mode="coord",
-        transform=vit_transform,
-    )
+    if exp_name.startswith("vit_coord"):
+        dataset = LumbarDataset(
+            csv_path=f"datasets/lumbar/splits/{split}.csv",
+            image_root=f"datasets/lumbar/images/{split}",
+            img_size=tuple(cfg["data"]["img_size"]),
+            mode="coord",
+            transform=vit_transform,
+        )
+    elif exp_name.startswith("vit_heatmap"):
+        dataset = LumbarDataset(
+            csv_path=f"datasets/lumbar/splits/{split}.csv",
+            image_root=f"datasets/lumbar/images/{split}",
+            img_size=tuple(cfg["data"]["img_size"]),
+            mode="heatmap",
+            transform=vit_transform,
+        )
     
     # --------------------------------------------------
     # Output directory (from YAML)
