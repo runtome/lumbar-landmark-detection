@@ -94,6 +94,8 @@ class LumbarDataset(Dataset):
 
         if self.mode == "coord":
             return img, coords
+        if self.mode == "heatmap":
+             return img, heatmaps
         else:
             return img, heatmaps
 
