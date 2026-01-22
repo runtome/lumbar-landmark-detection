@@ -88,7 +88,7 @@ def train_vit_heatmap(cfg):
     train_dataset = LumbarDataset(
         csv_path=cfg["data"]["train_csv"],
         image_root=cfg["data"]["train_image_root"],
-        heatmap_size=tuple(cfg["data"]["heatmap_size"]),
+        heatmap_size=tuple(cfg["model"]["heatmap_size"]),
         img_size=tuple(cfg["data"]["img_size"]),
         mode="heatmap",
         transform=vit_transform,
