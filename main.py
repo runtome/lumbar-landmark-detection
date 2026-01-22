@@ -8,15 +8,18 @@ from train.train_vit_heatmap import train_vit_heatmap
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
-    parser.add_argument("--model", type=str, choices=["vit", "vit_heatmap"], required=True)
     args = parser.parse_args()
 
     cfg = yaml.safe_load(open(args.config))
-
-    if args.model == "vit":
-        train_vit(cfg)
-    elif args.model == "vit_heatmap":
+    
+    if cfg["model"]["name"] == "vit_heatmap":
         train_vit_heatmap(cfg)
+    elif cfg["model"]["name"] == "vit":
+        train_vit(cfg)
+    
+    else:
+        raise ValueError(f"Unknown model name: {cfg['model']['name']}")
+
 
 if __name__ == "__main__":
     main()

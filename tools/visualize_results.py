@@ -8,7 +8,7 @@ from torchvision import transforms
 
 from datasets.lumbar_dataset import LumbarDataset
 from models.vit_coord import ViTCoordRegressor
-from models.vit_heatmap import ViTHeatmapRegressor 
+from models.vit_heatmap import ViTHeatmap 
 
 LEVEL_ORDER = ["L1/L2", "L2/L3", "L3/L4", "L4/L5", "L5/S1"]
 
@@ -46,7 +46,7 @@ def load_model(exp_name, device="cuda"):
             in_chans=1,
         ).to(device)
     elif exp_name.startswith("vit_heatmap"):
-        model = ViTHeatmapRegressor(
+        model = ViTHeatmap(
             num_landmarks=cfg["model"]["num_landmarks"],
             heatmap_size=cfg["model"]["heatmap_size"],
             in_chans=cfg["model"]["in_channels"],
