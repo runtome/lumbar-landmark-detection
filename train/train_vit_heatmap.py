@@ -66,7 +66,7 @@ def train_vit_heatmap(cfg):
     os.makedirs(os.path.dirname(log_csv_path), exist_ok=True)
     csv_file = open(log_csv_path, "w", newline="")
     csv_writer = csv.writer(csv_file)
-    csv_writer.writerow(["epoch", "train_loss", "val_loss", "mae_px", "lr"])
+    csv_writer.writerow(["epoch", "train_loss", "val_loss", "lr"])
     
     LEVELS = ["L1", "L2", "L3", "L4", "L5"]
 
@@ -349,7 +349,6 @@ def train_vit_heatmap(cfg):
                 epoch,
                 train_loss,
                 val_loss if epoch % cfg["logging"]["val_interval"] == 0 else None,
-                mae_px if epoch % cfg["logging"]["val_interval"] == 0 else None,
                 current_lr,
             ])
             csv_file.flush()
