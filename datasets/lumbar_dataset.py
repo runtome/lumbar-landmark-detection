@@ -14,17 +14,20 @@ class LumbarDataset(Dataset):
         csv_path,
         image_root,
         img_size=(224, 224),
+        heatmap_size=(56, 56),
         mode="coord",          # "coord" | "heatmap"
-        sigma=4,
+        sigma=2,
         transform=None,
     ):
         self.df = pd.read_csv(csv_path)
         self.image_root = image_root
+        
         self.img_size = img_size
         self.mode = mode
         self.sigma = sigma
         self.transform = transform
-
+        self.heatmap_size = heatmap_size
+        # group annotations by image
         self.samples = list(self.df.groupby("filename"))
 
     def __len__(self):
@@ -38,7 +41,7 @@ class LumbarDataset(Dataset):
         return img
 
     def _make_heatmap(self, x, y):
-        H, W = self.img_size
+        H, W = self.heatmap_size
         xx, yy = np.meshgrid(np.arange(W), np.arange(H))
         heatmap = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * self.sigma ** 2))
         return heatmap.astype(np.float32)
@@ -72,8 +75,8 @@ class LumbarDataset(Dataset):
                 heatmaps.append(np.zeros((H, W), dtype=np.float32))
             else:
                 # normalized GT from CSV
-                x_norm = r.relative_x.values[0]
-                y_norm = r.relative_y.values[0]
+                x_norm = float(r.relative_x.values[0])
+                y_norm = float(r.relative_y.values[0])
 
                 # clamp safety
                 x_norm = np.clip(x_norm, 0.0, 1.0)
@@ -81,9 +84,9 @@ class LumbarDataset(Dataset):
 
                 coords.append([x_norm, y_norm])
 
-                # convert to pixel for heatmap
-                x_pix = x_norm * W
-                y_pix = y_norm * H
+                # 🔥 convert to HEATMAP resolution (NOT image resolution)
+                x_pix = x_norm * self.heatmap_size[1]
+                y_pix = y_norm * self.heatmap_size[0]
                 heatmaps.append(self._make_heatmap(x_pix, y_pix))
 
         coords = torch.tensor(coords, dtype=torch.float32)

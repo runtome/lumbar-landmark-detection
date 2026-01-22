@@ -88,6 +88,7 @@ def train_vit_heatmap(cfg):
     train_dataset = LumbarDataset(
         csv_path=cfg["data"]["train_csv"],
         image_root=cfg["data"]["train_image_root"],
+        heatmap_size=tuple(cfg["data"]["heatmap_size"]),
         img_size=tuple(cfg["data"]["img_size"]),
         mode="heatmap",
         transform=vit_transform,
@@ -97,6 +98,7 @@ def train_vit_heatmap(cfg):
         csv_path=cfg["data"]["val_csv"],
         image_root=cfg["data"]["val_image_root"],
         img_size=tuple(cfg["data"]["img_size"]),
+        heatmap_size=tuple(cfg["data"]["heatmap_size"]),
         mode="heatmap",
         transform=vit_transform,
     )
@@ -166,7 +168,7 @@ def train_vit_heatmap(cfg):
         pbar = tqdm(
             train_loader,
             desc=f"Epoch {epoch}/{cfg['training']['epochs']} [Train]",
-            leave=False
+            leave=True
         )
 
         for img, gt_hm in pbar:
@@ -220,7 +222,7 @@ def train_vit_heatmap(cfg):
             pbar = tqdm(
                 val_loader,
                 desc=f"Epoch {epoch}/{cfg['training']['epochs']} [Val]",
-                leave=False
+                leave=True
             )
                         
             mae_sum = torch.zeros(cfg["model"]["num_landmarks"], device=device)
