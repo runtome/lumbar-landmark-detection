@@ -14,7 +14,7 @@ class LumbarDataset(Dataset):
         csv_path,
         image_root,
         img_size=(224, 224),
-        heatmap_size=(56, 56),
+        heatmap_size=56,
         mode="coord",          # "coord" | "heatmap"
         sigma=2,
         transform=None,
