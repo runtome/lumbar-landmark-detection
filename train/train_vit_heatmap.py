@@ -399,10 +399,15 @@ def train_vit_heatmap(cfg):
 
                 # Overlay and log to TensorBoard
                 for i in range(min(3, img_vis.size(0))):
+                    # decode heatmaps → coords (single image)
+                    gt_xy_i = gt_xy[i].detach().cpu().numpy()       # [N, 2] pixel coords
+                    pred_xy_i = pred_xy[i].detach().cpu().numpy()   # [N, 2] pixel coords
+
+                    
                     overlay = draw_landmarks(
                         image=img_vis[i],
-                        gt=gt_vis[i],
-                        pred=pred_vis[i]
+                        gt=gt_xy_i,
+                        pred=pred_xy_i
                     )
 
                     writer.add_image(
