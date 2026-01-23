@@ -252,15 +252,15 @@ def train_vit_heatmap(cfg):
                     pred_xy_px = pred_xy.clone()
                     gt_xy_px   = gt_xy.clone()
                     
-                    pred_xy[..., 0] *= W
-                    pred_xy[..., 1] *= H
-                    gt_xy[..., 0] *= W
-                    gt_xy[..., 1] *= H
+                    pred_xy_px[..., 0] *= W
+                    pred_xy_px[..., 1] *= H
+                    gt_xy_px[..., 0] *= W
+                    gt_xy_px[..., 1] *= H
                     
                     # ----------------------------------
                     # 🔹 Pixel MAE
                     # ----------------------------------
-                    abs_err = torch.norm(pred_xy_px - gt_xy_px, dim=-1)  # [B, 5]
+                    abs_err = torch.norm(pred_xy_px - gt_xy_px, dim=-1)
                     running_abs_error += abs_err.sum().item()
                     running_count += abs_err.numel()
                     
@@ -286,8 +286,13 @@ def train_vit_heatmap(cfg):
             for i, lvl in enumerate(LEVELS):
                 vals = np.array(pixel_errors[i])
 
-                mean = vals.mean()
-                std = vals.std()
+                if len(vals) == 0:
+                    mean = 0.0
+                    std = 0.0
+                    
+                else:
+                    mean = vals.mean()
+                    std = vals.std()
 
                 mean_err.append(mean)
                 std_err.append(std)

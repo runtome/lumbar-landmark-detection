@@ -42,9 +42,9 @@ def draw_heatmaps_on_image(
     colormap=cv2.COLORMAP_JET,
 ):
     """
-    image:    Tensor [C,H,W] or ndarray [H,W,C]
+    image:    Tensor [C,H,W] or ndarray [H,W] or [H,W,C]
     heatmaps: Tensor [N,H,W]
-    return:   ndarray [H,W,C] uint8
+    return:   ndarray [H,W,3] uint8
     """
 
     # ------------------
@@ -52,37 +52,44 @@ def draw_heatmaps_on_image(
     # ------------------
     if torch.is_tensor(image):
         image = image.detach().cpu().numpy()
-        image = np.transpose(image, (1, 2, 0))  # HWC
-        image = (image - image.min()) / (image.max() - image.min() + 1e-6)
-        image = (image * 255).astype(np.uint8)
+        if image.ndim == 3:          # CHW
+            image = np.transpose(image, (1, 2, 0))
+    else:
+        image = image.copy()
+
+    # normalize image
+    image = image.astype(np.float32)
+    image = (image - image.min()) / (image.max() - image.min() + 1e-6)
+    image = (image * 255).astype(np.uint8)
+
+    # ensure 3-channel
+    if image.ndim == 2:
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    elif image.shape[2] == 1:
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
 
     H, W, _ = image.shape
 
     # ------------------
-    # Merge heatmaps
+    # Heatmaps → numpy
     # ------------------
     if torch.is_tensor(heatmaps):
         heatmaps = heatmaps.detach().cpu().numpy()
 
-    heatmap_sum = heatmaps.max(axis=0)  # [H,W]
+    heatmap = heatmaps.max(axis=0)  # [H,W]
 
-    heatmap_sum = (heatmap_sum - heatmap_sum.min()) / (
-        heatmap_sum.max() - heatmap_sum.min() + 1e-6
-    )
-    heatmap_sum = (heatmap_sum * 255).astype(np.uint8)
+    heatmap = (heatmap - heatmap.min()) / (heatmap.max() - heatmap.min() + 1e-6)
+    heatmap = (heatmap * 255).astype(np.uint8)
 
-    heatmap_color = cv2.applyColorMap(heatmap_sum, colormap)
+    heatmap_color = cv2.applyColorMap(heatmap, colormap)
 
     # ------------------
     # Overlay
     # ------------------
     overlay = cv2.addWeighted(
-        image,
-        1 - alpha,
-        heatmap_color,
-        alpha,
-        0,
+        image, 1 - alpha,
+        heatmap_color, alpha,
+        0
     )
 
     return overlay
-
