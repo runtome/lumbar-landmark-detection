@@ -381,18 +381,20 @@ def train_vit_heatmap(cfg):
                 gt_xy[..., 1]   *= H
                 
                 #Overlay Heatmaps and log to TensorBoard
-                overlay_pred_hm = draw_heatmaps_on_image(
-                    image=img_vis[i],
-                    heatmaps=pred_vis[i],
-                    alpha=0.45
-                )
+                for i in range(min(3, img_vis.size(0))):
+                    # 🔥 Overlay GT Heatmap
+                    overlay_gt_hm = draw_heatmaps_on_image(
+                        image=img_vis[i],
+                        heatmaps=gt_vis[i],
+                        alpha=0.45
+                    )
 
-                writer.add_image(
-                    f"Validation/Pred_Heatmap/epoch_{epoch}_sample_{i}",
-                    overlay_pred_hm,
-                    epoch,
-                    dataformats="HWC"
-                )
+                    writer.add_image(
+                        f"Validation/GT_Heatmap/epoch_{epoch}_sample_{i}",
+                        overlay_gt_hm,
+                        epoch,
+                        dataformats="HWC"
+                    )
 
 
                 # Overlay and log to TensorBoard
