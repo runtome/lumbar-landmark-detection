@@ -166,6 +166,10 @@ def show_val_results(
 
     for idx in indices:
         img, gt = dataset[idx]
+        
+        # 🔥 FIX: convert GT heatmap → coords
+        if exp_name.startswith("vit_heatmap"):
+            gt = heatmaps_to_coords(gt, cfg["data"]["img_size"])
 
         with torch.no_grad():
             pred = model(img.unsqueeze(0).to(device))[0].cpu()
