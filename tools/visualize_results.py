@@ -6,6 +6,7 @@ import torch
 import random
 import matplotlib.pyplot as plt
 from torchvision import transforms
+import numpy as np
 
 from datasets.lumbar_dataset import LumbarDataset
 from models.vit_coord import ViTCoordRegressor
@@ -71,17 +72,12 @@ def visualize_gt_vs_pred(
     title,
     img_size,
     save_path=None,
-    is_heatmap=False,
 ):
     img = img.squeeze().cpu().numpy()
 
     # 🔧 convert to pixel space
     gt = to_pixel_coords(gt, img_size)
-    if is_heatmap:
-        pred = heatmaps_to_coords(pred, img_size)
-    else:
-        pred = to_pixel_coords(pred, img_size)
-    
+    pred = to_pixel_coords(pred, img_size)
     
 
     plt.figure(figsize=(5, 5))
@@ -173,6 +169,10 @@ def show_val_results(
 
         with torch.no_grad():
             pred = model(img.unsqueeze(0).to(device))[0].cpu()
+        
+        # 🔥 HEATMAP MODEL → convert here
+        if exp_name.startswith("vit_heatmap"):
+            pred = heatmaps_to_coords(pred, cfg["data"]["img_size"])
 
         save_path = None
         if save_image:
@@ -188,7 +188,6 @@ def show_val_results(
             title=f"{exp_name} | {split} | sample {idx}",
             img_size=cfg["data"]["img_size"],   # 🔧 ADD THIS
             save_path=save_path,
-            is_heatmap=exp_name.startswith("vit_heatmap"),  # ✅ ADD
         )
         
         
@@ -197,44 +196,24 @@ def show_val_results(
 #-------------------------------------------------
 def heatmaps_to_coords(heatmaps, img_hw):
     """
-    heatmaps: torch or numpy [N, h, w]
-    img_hw: (H, W)
-    returns torch [N, 2] in pixel coords
+    heatmaps: [N,h,w] torch or numpy
+    returns normalized coords [N,2]
     """
-    if isinstance(heatmaps, np.ndarray):
-        heatmaps = torch.from_numpy(heatmaps)
+    if torch.is_tensor(heatmaps):
+        heatmaps = heatmaps.cpu()
 
     N, h, w = heatmaps.shape
     H, W = img_hw
 
     coords = []
     for i in range(N):
-        hm = heatmaps[i]
-        idx = torch.argmax(hm)
+        idx = heatmaps[i].view(-1).argmax()
         y = idx // w
         x = idx % w
 
-        x = x.float() / w * W
-        y = y.float() / h * H
+        coords.append([
+            x / w,   # normalized
+            y / h
+        ])
 
-        coords.append([x, y])
-
-    return torch.stack([torch.tensor(c) for c in coords])
-
-def draw_landmarks_from_heatmaps(
-    image,          # [1,H,W]
-    heatmaps,       # [N,h,w]
-    gt=None,        # [N,2] normalized
-    radius=4
-):
-    H, W = image.shape[-2:]
-
-    pred_coords = heatmaps_to_coords(heatmaps, (H, W))
-
-    return draw_landmarks(
-        image=image,
-        gt=gt,
-        pred=pred_coords,
-        radius=radius
-    )
-
+    return torch.tensor(coords)
