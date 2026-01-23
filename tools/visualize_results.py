@@ -1,6 +1,7 @@
 # tools\visualize_results.py
 import os
 import yaml
+from tools.visualization_utils import draw_landmarks
 import torch
 import random
 import matplotlib.pyplot as plt
@@ -70,12 +71,18 @@ def visualize_gt_vs_pred(
     title,
     img_size,
     save_path=None,
+    is_heatmap=False,
 ):
     img = img.squeeze().cpu().numpy()
 
     # 🔧 convert to pixel space
     gt = to_pixel_coords(gt, img_size)
-    pred = to_pixel_coords(pred, img_size)
+    if is_heatmap:
+        pred = heatmaps_to_coords(pred, img_size)
+    else:
+        pred = to_pixel_coords(pred, img_size)
+    
+    
 
     plt.figure(figsize=(5, 5))
     plt.imshow(img, cmap="gray")
@@ -181,4 +188,53 @@ def show_val_results(
             title=f"{exp_name} | {split} | sample {idx}",
             img_size=cfg["data"]["img_size"],   # 🔧 ADD THIS
             save_path=save_path,
+            is_heatmap=exp_name.startswith("vit_heatmap"),  # ✅ ADD
         )
+        
+        
+#-------------------------------------------------
+# Heatmap to Coord Conversion (for ViTHeatmap)
+#-------------------------------------------------
+def heatmaps_to_coords(heatmaps, img_hw):
+    """
+    heatmaps: torch or numpy [N, h, w]
+    img_hw: (H, W)
+    returns torch [N, 2] in pixel coords
+    """
+    if isinstance(heatmaps, np.ndarray):
+        heatmaps = torch.from_numpy(heatmaps)
+
+    N, h, w = heatmaps.shape
+    H, W = img_hw
+
+    coords = []
+    for i in range(N):
+        hm = heatmaps[i]
+        idx = torch.argmax(hm)
+        y = idx // w
+        x = idx % w
+
+        x = x.float() / w * W
+        y = y.float() / h * H
+
+        coords.append([x, y])
+
+    return torch.stack([torch.tensor(c) for c in coords])
+
+def draw_landmarks_from_heatmaps(
+    image,          # [1,H,W]
+    heatmaps,       # [N,h,w]
+    gt=None,        # [N,2] normalized
+    radius=4
+):
+    H, W = image.shape[-2:]
+
+    pred_coords = heatmaps_to_coords(heatmaps, (H, W))
+
+    return draw_landmarks(
+        image=image,
+        gt=gt,
+        pred=pred_coords,
+        radius=radius
+    )
+
