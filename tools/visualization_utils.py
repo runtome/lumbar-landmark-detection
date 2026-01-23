@@ -33,3 +33,56 @@ def draw_landmarks(
             cv2.circle(img, (int(x), int(y)), radius, (255, 0, 0), -1)
 
     return img
+
+
+def draw_heatmaps_on_image(
+    image,
+    heatmaps,
+    alpha=0.4,
+    colormap=cv2.COLORMAP_JET,
+):
+    """
+    image:    Tensor [C,H,W] or ndarray [H,W,C]
+    heatmaps: Tensor [N,H,W]
+    return:   ndarray [H,W,C] uint8
+    """
+
+    # ------------------
+    # Image → numpy
+    # ------------------
+    if torch.is_tensor(image):
+        image = image.detach().cpu().numpy()
+        image = np.transpose(image, (1, 2, 0))  # HWC
+        image = (image - image.min()) / (image.max() - image.min() + 1e-6)
+        image = (image * 255).astype(np.uint8)
+
+    H, W, _ = image.shape
+
+    # ------------------
+    # Merge heatmaps
+    # ------------------
+    if torch.is_tensor(heatmaps):
+        heatmaps = heatmaps.detach().cpu().numpy()
+
+    heatmap_sum = heatmaps.max(axis=0)  # [H,W]
+
+    heatmap_sum = (heatmap_sum - heatmap_sum.min()) / (
+        heatmap_sum.max() - heatmap_sum.min() + 1e-6
+    )
+    heatmap_sum = (heatmap_sum * 255).astype(np.uint8)
+
+    heatmap_color = cv2.applyColorMap(heatmap_sum, colormap)
+
+    # ------------------
+    # Overlay
+    # ------------------
+    overlay = cv2.addWeighted(
+        image,
+        1 - alpha,
+        heatmap_color,
+        alpha,
+        0,
+    )
+
+    return overlay
+

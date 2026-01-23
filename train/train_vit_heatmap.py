@@ -15,7 +15,7 @@ from datasets.lumbar_dataset import LumbarDataset
 from tools.logger import create_writer
 from tools.early_stopping import EarlyStopping
 from tools.plotting import plot_pixel_error_per_level
-from tools.visualization_utils import draw_landmarks
+from tools.visualization_utils import draw_heatmaps_on_image, draw_landmarks
 
 import torch.nn.functional as F
 
@@ -363,13 +363,34 @@ def train_vit_heatmap(cfg):
 
                 with torch.no_grad():
                     pred_vis = model(img_vis)
-
-                overlay = draw_landmarks(
-                    image=img_vis[0],
-                    gt=gt_vis[0],
-                    pred=pred_vis[0]
-                )
+                    
+                    
+                # 🔥 decode heatmaps → coordinates
+                pred_xy = soft_argmax_2d(pred_vis)
+                gt_xy   = soft_argmax_2d(gt_vis)
                 
+                H, W = cfg["data"]["img_size"]
+                pred_xy[..., 0] *= W
+                pred_xy[..., 1] *= H
+                gt_xy[..., 0]   *= W
+                gt_xy[..., 1]   *= H
+                
+                #Overlay Heatmaps and log to TensorBoard
+                overlay_pred_hm = draw_heatmaps_on_image(
+                    image=img_vis[i],
+                    heatmaps=pred_vis[i],
+                    alpha=0.45
+                )
+
+                writer.add_image(
+                    f"Validation/Pred_Heatmap/epoch_{epoch}_sample_{i}",
+                    overlay_pred_hm,
+                    epoch,
+                    dataformats="HWC"
+                )
+
+
+                # Overlay and log to TensorBoard
                 for i in range(min(3, img_vis.size(0))):
                     overlay = draw_landmarks(
                         image=img_vis[i],
