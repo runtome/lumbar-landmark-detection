@@ -16,7 +16,7 @@ data:
 
 
 training:
-  epochs: 10
+  epochs: 100
   lr: 0.001
   optimizer: adamw
   weight_decay: 0.01
